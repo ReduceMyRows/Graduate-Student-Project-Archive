@@ -1,0 +1,20 @@
+# Core estimation parameters
+cluster: county
+
+# Event study window (quarters)
+event_leads: 8
+event_lags: 12
+
+# Fixed effects toggles
+fe_county: true
+fe_quarter: true
+fe_policy_type: true
+
+# Transformations
+use_logs: true
+winsorize: false
+winsorize_pctl: [0.01, 0.99]
+
+# Robustness switches
+exclude_hurricane_quarters: false
+lag_treatment_quarters: 0

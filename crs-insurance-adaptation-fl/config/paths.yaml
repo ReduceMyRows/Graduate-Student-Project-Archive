@@ -1,0 +1,7 @@
+# Update these paths if your raw data lives outside the repo.
+# If you keep raw data inside the repo (not recommended for git), you can leave these as-is.
+raw_oir_quasr: data/raw/oir_quasr
+raw_fema_crs: data/raw/fema_crs
+raw_firm_maps: data/raw/firm_maps
+raw_storms_disasters: data/raw/storms_disasters
+raw_crosswalks: data/raw/crosswalks
