@@ -1,0 +1,769 @@
+---
+title: "The Green Fund in South Africa"
+author: "W H"
+date: "5/1/2021"
+output: 
+  pdf_document
+---
+***
+|       There is an overwhelming interest in the carbon trade and how each country is limiting its own carbon emissions. A large interest within this, is how important carbon sequestration is to each country. This has created a business model in certain countries to go after ‘green’ cash, or funding to switch into cleaner practices.  This paper explores any changes that the ‘green’ interest may have had on global emissions using South Africa as an example.
+***
+
+```{r setup, include=FALSE, warning=F}
+knitr::opts_chunk$set(comment = NA, 
+                      warning = F, 
+                      echo = F,
+                      include = F)
+pacman::p_load(tidyverse, stargazer, broom, ggplot2, magrittr, kableExtra, knitr, xtable, 
+               urca, forecast, lmtest, graphicx, vars, cowplot, gridExtra, gridGraphics, ggpubr)
+
+#directory set up
+root_directory <- 'C:/Users/jhoel/Documents/Local Time Series/R dump'
+data_directory <- 'C:/Users/jhoel/Documents/Local Time Series/Homework/Midterm/Midterm Data'
+function_directory <- paste0(root_directory,'/R Functions')
+
+#functions to be used
+source(file= paste0(function_directory,'/intord.R')) #intord(y) where y is a TS dataset
+source(file= paste0(function_directory,'/seas.R')) 
+#seas(n,p) where it generates seasonal dummies for TS that has seasonality, for (n) nobs, 
+#and (p) time-periods.
+```
+
+```{r load data and set up, include=FALSE}
+
+#dataset to be used
+imfDOT <- read.csv(file=paste0(data_directory,'/mnly.IMF.DOTS.csv'))
+imfPCTOT <- read.csv(file=paste0(data_directory,'/mnly.IMF.PCTOT.csv'))
+imfCPI <- read.csv(file=paste0(data_directory,'/mnly.IMF.CPI.csv'))
+noaaCO2 <- read.csv(file=paste0(data_directory,'/mnly.NOAA.global_avg_marine_surface_co2.csv'))
+
+colnames(imfDOT)[1] <- "Country"
+colnames(imfPCTOT)[1] <- "Country"
+colnames(imfCPI)[1] <- "Country"
+
+dot <- imfDOT[grepl("Value", imfDOT$Attribute),]
+dot <- dot[-c(1:7,length(dot))]
+ts.dot <- as.numeric(dot)
+#this will be our time series for the Goods, Value of Export, Free on Board in US Dollars from
+#South Africa to United States between Jan1998 to November2020.
+#sanity check
+1998+length(ts.dot)/12
+.917*12 #11th month, formatting data checks out
+
+pctot <- imfPCTOT[imfPCTOT$Country %in% "South Africa",]
+export <- pctot[12,]
+export <- export[-c(1:7,length(export))] 
+ts.ex <- as.numeric(export)
+#Export price index with fixed weights by the ratio of exports to gdp between Jan1980 to Jan2021
+
+import <- pctot[1,]
+import <- import[-c(1:7,length(import))] 
+ts.im <- as.numeric(import)
+#Import price index with fixed weights by the ratio of imports to gdp between Jan1980 to Jan2021
+
+cpi <- imfCPI[imfCPI$Country %in% "South Africa",]
+cpi <- cpi[grepl("Value", cpi$Attribute),]
+cpi <- cpi[grepl("PCPI_IX", cpi$Indicator.Code),]
+cpi <- cpi[-c(1:5,length(cpi)-1,length(cpi))]
+colnames(cpi[769])
+ts.cpi <- as.numeric(cpi)
+#this will be our time series for South Africa's CPI between Jan1957 to Jan2021
+
+#chop everything up to match dates between Jan1998 to Nov2020
+18*12+275+2 #checking the chopping range for exports + imports
+(1998-1957)*12+275+2 #checking chopping range for cpi
+colnames(cpi[492])
+colnames(export[216])
+colnames(import[216])
+colnames(cpi[length(cpi)-1])
+colnames(export[length(export)-1])
+colnames(import[length(import)-1])
+
+ts.ex <- ts.ex[-c(1:216,length(ts.ex)-1,length(ts.ex))]
+ts.im <- ts.im[-c(1:216,length(ts.im)-1,length(ts.im))]
+ts.cpi <- ts.cpi[-c(1:492,length(ts.cpi)-1,length(ts.cpi))]
+#check our plots
+par(mfrow = c(2,2))
+plot(ts.cpi)
+plot(ts.dot)
+mtext("Table 2, Time Series plots", side = 3, line = -2, outer = TRUE)
+plot(ts.ex)
+plot(ts.im)
+
+yearstudied <- seq(1998,2020)
+co2 <- noaaCO2[grepl("1998|1999|200|201|202", noaaCO2$year),]
+ts.co2 <- as.numeric(co2$average[1:275])
+plot(ts.co2)
+
+#set data as time series with annual frequency
+ts.co2 <- ts(ts.co2, start = c(1998, 1), frequency = 12)
+ts.cpi <- ts(ts.cpi, start = c(1998, 1), frequency = 12)
+ts.dot <- ts(ts.dot, start = c(1998, 1), frequency = 12)
+ts.ex <- ts(ts.ex, start = c(1998, 1), frequency = 12)
+ts.im <- ts(ts.im, start = c(1998, 1), frequency = 12)
+```
+
+#  (i) Univariate Model
+
+|       I consider a time series involving carbon emissions from the green funding. A global scale of carbon emissions is used as country-specific emission data does not capture the transfers of carbon emission from other country into South Africa. It may seem seem unrealistic for South Africa to have an impact on global emissions, however more than 60% of the population in sub-Sahara Africa are smallholder farmers since 2014. A 2009 World Bank study shows that South Africa only uses 1.8% of potential farmland, which is less than 1.5% of the globally used arable lands. I use National Oceanographic and Atmospheric Administration’s (NOAA) monthly mean carbon dioxide globally averaged over their marine surface sites. They measure the number of carbon dioxide molecules in the air after the removal of water vapor, known as “molecule fraction.” 
+|       Considering the success of the green funding, there should potentially be an increase in the trading of the country as they produce more agricultural goods with the funding. Part of the increasing funding and production towards agricultural goods, we can expect to see an increase in the infrastructure and livelihood for the labor force. I use three time series of commodity terms of trade, direction of trade statistics, and the consumer price index from the International Monetary Fund. Terms of trade shows the temporal change in international price indices over 45 commodities, with country specific series such as commodity import and export indices, with fixed weights based on average trade flows over several decades. Consumer price index shows the change in prices of goods and services for households. The direction of trade statistics shows the value of merchandise export and imports in United States dollars (USD) with each country, where the relationship between South Africa and United States was used in this example. The summary statistics is what I expected of each dataset, with maybe the export and import indices from the terms of trading being much lower relative to the consumer price index. Included below is the summary statistics in Table 1.
+```{r summary statistics, include=F}
+summary(ts.co2)
+sd(ts.co2)
+summary(ts.cpi)
+sd(ts.cpi)
+summary(ts.dot)
+sd(ts.dot)
+summary(ts.ex)
+sd(ts.ex)
+summary(ts.im)
+sd(ts.im)
+```
+
+
+\begin{table}[!htbp] \centering 
+  \caption{} 
+  \label{} 
+\begin{tabular}{@{\extracolsep{5pt}}lcccccc} 
+\\[-1.8ex]\hline 
+\hline \\[-1.8ex] 
+ & \multicolumn{3}{c}{\textit{Summary Statistics}} \\ 
+\cline{1-7} 
+ \\ 
+\\[-1.8ex]Time Series: & Variable Name & Metric & Min & Max & Mean & SD \\ 
+\hline \\[-1.8ex] 
+Carbion Dioxide Levels     &Co2 &ppm    &364.1  &417.1  &388.5  &14.4849\\
+  			& & &  \\
+Consumer Price Index     &CPI &index  &36.59  &116.80 &70.76  &24.0564\\
+  			& & &  \\
+Direction Of Trade Statistics     &DOT &USD    &99616441   &934780431  &455493475  &187783793\\
+  			& & &  \\
+Commodity Export  &Exp &index  &95.01  &101.50 &98.40  &1.8447\\
+  			& & &  \\
+Commodity Import  &Imp &index  &95.36  &101.21 &98.76  &1.3562\\
+  			& & &  \\
+\hline 
+\hline \\[-1.8ex] 
+{Observations: 275}
+\end{tabular} 
+\end{table} 
+
+\newpage
+|       In determining the order of integration, an Augmented Dickey Fuller (ADF) unit root test is done on each variable. Further evidence of stationarity is investigated looking for a rapid decay in the autocorrelation function (ACF), visual indication of a constant mean and variance in the time series, and using the rule of thumb that standard deviation should not decrease by more than half in a stationary series.
+
+```{r intord on dataset, include= TRUE}
+#checking for stationarity
+intord(ts.co2) #nonstationary, on all four aspects 
+#(visually, rule of thumb, acf, and adf results), 
+#First difference seems stationary on all four aspects, 
+#however a seasonal pattern is visible and expected in the 
+#first difference of the time series and acf plot. 
+```
+
+```{r quietly intord on dataset, include=F}
+intord(ts.cpi) #nonstationary, on all four aspects as well. First difference seems stationary 
+#on all four aspects too, in the first difference a seasonal pattern in the ACF and
+#slight changes in the variation on the time series.
+
+ts.dot.thou <- ts.dot/1000 #intord(ts.dot) had values too large so I downscale the values to
+#be in THOUSANDS of USD. This does not influence the statistical test or results, only the 
+#direct interpretation of coefficient.
+
+intord(ts.dot.thou) #nonstationary, again on all four. First difference is stationary and
+#does not seem to have a seasonal pattern yet.
+
+intord(ts.ex) #nonstationary on all four aspects. First difference checks out.
+
+intord(ts.im) #nonstationary, but reject the null of the ADF at the 5% level. Primarily with
+#ACF not decaying fast and SD rule of thumb, I will use the first difference as it follows all 
+#four aspects.
+```
+
+A summary of the findings is provided in Table 2.
+**Table 2**
+
+|  | Plot Visual Check | Rule of Thumb | ACF Plot | ADF Test |
+|:---|---:|---:|---:|---:|
+| **Co2** |  |  |  |  |
+| Level |  Mean Ascending with<br> seasonal pattern | SD decreases by<br> more than half | Slow Decay | Fail to Reject |
+| 1st Difference | +Constant Mean with<br> seasonal pattern | +SD decreases by<br> less than half | Decay with<br> seasonal pattern | +Reject the Null<br> at the 5% level |
+| **CPI** |  |  |  |  |
+| Level | Mean Ascending | SD decreases by<br> more than half | Slow Decay | Fail to Reject |
+| 1st Difference | +Constant Mean | +SD increases | +Rapid Decay | +Reject the Null<br> at the 1% level|
+| **DOT** | | | | |
+| Level |  Mean Ascending in<br> first half of series | +SD decreases by<br> less than half | Slow Decay | Fail to Reject |
+| 1st Difference | +Constant Mean | +SD increases | +Rapid Decay | +Reject the Null<br> at the 1% level|
+| **EXP** | | | | |
+| Level |  Mean Ascending | SD decreases by<br> more than half | Slow Decay | Fail to Reject |
+| 1st Difference | +Constant Mean | +SD increases | +Rapid Decay | +Reject the Null<br> at the 1% level|
+| **IMP** | | | | |
+| Level |  Mean Ascending | SD decreases by<br> more than half | Slow Decay | Fail to Reject |
+| 1st Difference | +Constant Mean | +SD increases | +Rapid Decay | +Reject the Null<br> at the 1% level|
+
+\hfill + Indicates evidence of stationarity.
+
+
+|       The evidence finds that the orders of integration of all variables follows an I(1). The best univariate models for each model was as follows:
+1)  $\text{Co2}_t = \Phi_1\text{Co2}_{t-12}+\epsilon_t+\theta_1\epsilon_{t-1}+\Theta_1\epsilon_{t-12}$
+2)  $\text{CPI}_t = \phi_1\text{CPI}_{t-1}+\epsilon_t+\Theta_1\epsilon_{t-12}$ 
+3)  $\text{DOT}_t = \epsilon_t+\theta_1\epsilon_{t-1}+\Theta_1\epsilon_{t-12}$
+4)  $\text{EXP}_t = \phi_1\text{EXP}_{t-1}+\epsilon_t+\theta_1\epsilon_{t-1}+\theta_2\epsilon_{t-2}$ 
+5)  $\text{IMP}_t = \phi_1\text{IMP}_{t-1}+\phi_2\text{IMP}_{t-2}+\phi_3\text{IMP}_{t-3}+\epsilon_t+\theta_1\epsilon_{t-1}$
+
+```{r univariate estimation results, include=F}
+ar.co2 <- Arima(ts.co2, order = c(0,1,1), 
+                seasonal = list(order=c(1,1,1)))
+#reducing AR terms increases the AIC&BIC, increasing any term also further reduces the 
+#AIC&BIC which prompts for further investigation.
+ar.cpi <- Arima(ts.cpi, order = c(1,1,0),
+                seasonal = list(order=c(0,1,1))) 
+#including a seasonal term decreases the IC values by a lot, to possibly introduce an SMA term.
+ar.dot <- Arima(ts.dot.thou, order = c(0,1,1), 
+                seasonal = list(order=c(0,1,1)))
+#Reducing ARIMA terms incrementally decreases BIC, until an ARIMA(0,1,1)(0,1,1) is used.
+ar.ex <- Arima(ts.ex, order = c(1,1,2)) 
+#decreasing MA terms decreases the BIC, looking at possibly an AR(1) to be used.
+ar.im <- Arima(ts.im, order = c(3,1,1)) 
+#decreasing AR terms decreases the BIC, looking at possibly an MA(1) to be used
+
+summary(ar.co2)
+summary(ar.cpi)
+summary(ar.dot)
+summary(ar.ex)
+summary(ar.im)
+```
+
+With estimation results of:
+
+\begin{table}[!htbp] \centering 
+  \caption{} 
+  \label{} 
+\begin{tabular}{@{\extracolsep{5pt}}lccccc} 
+\\[-1.8ex]\hline 
+\hline \\[-1.8ex] 
+ & \multicolumn{3}{c}{Best Fitting Univariate Models} \\ 
+\cline{1-6} 
+ & \multicolumn{3}{c}{\textit{Estimation Results}} \\  \\ 
+\\[-1.8ex]ARIMA with &Co2 &CPI &DOT &EXP &IMP\\
+\\[-1.8ex](p,d,q)(P,D,Q)& (0,1,1)(1,1,1) & (1,1,0)(0,1,1) & (0,1,1)(0,1,1) & (1,1,2) & (3,1,1) \\ 
+\hline \\[-1.8ex] 
+$\phi_1$    & - & .4300 & - & .5475 & 1.2302\\
+            & - & (.0557)*** & - & (.2306)*** & (.1298)***\\
+  			& & &  \\
+  			
+$\phi_2$    & - & - & - & - & -.3750\\
+            & - & - & - & - & (.1050)***\\
+  			& & &  \\
+  			
+$\phi_3$    & - & - & - & - & .0190\\
+            & - & - & - & - & (.0687)\\
+  			& & &  \\
+  			
+$\Phi_1$    & .0303 & - & - & - & -\\
+            & (.0801) & - & - & - & -\\
+  			& & &  \\
+  			
+$\theta_1$  & .7935 & - & -.5920 & -.1268 & -.8893\\
+            & (.0362)*** & - & (.0495)*** & (.2406) & (.1142)***\\
+  			& & &  \\
+  			
+  			
+$\theta_2$  & - & - & - & -.0541 & -\\
+            & - & - & - & (.1145) & -\\
+  			& & &  \\
+  			
+$\Theta_1$  & -.8446 & -.7372 & -.9358 & - & -\\
+            & (.0606)*** & (.0449)*** & (.0739)*** & - & -\\
+  			& & &  \\
+  			
+\hline \\[-1.8ex] 
+Observations & 262 & 262 & 262 & 274 & 274 \\ 
+BIC & -429.24 & 51.49 & 6718.81 & -205.89 & -58.88\\
+\hline 
+\hline \\[-1.8ex] 
+\textit{Note:}  & \multicolumn{2}{l}{$^{*}$p$<$0.1; $^{**}$p$<$0.05; $^{***}$p$<$0.01} \\ 
+\end{tabular} 
+\end{table} 
+
+\newpage
+#  (ii) Co-integration
+
+|       Cointegration is the linear combination of nonstationary variables which produces stationary residuals. When variables are cointegrated, there exists a long-run relationship where they are moved to have a fixed distance between each other. Considering Engle and Granger, they need to follow the same order of integration. A Johansen test is conducted to see how many variables are co-integrated, with an Engle-Granger method done on individual pairs of variables.
+
+```{r cointegration tests}
+agg_data <- cbind(ts.co2,ts.cpi,ts.dot.thou,ts.ex,ts.im)
+js_agg <- ca.jo(agg_data)
+summary(js_agg) 
+#johansen test fails to reject r<= 2 at the 10% lvl, but rejects the null of r<= 1 at the 
+#1% level, indicating there are 2 or less cointegrating relationships.
+js_seas <- ca.jo(agg_data, season = 12)
+summary(js_seas) 
+#johan test with seasonal dummies fails to reject r<=1 even at the 10% lvl, indicating that
+#there might be a cointegrating relationship.
+
+#utilizing the first phase of Engle-Granger method to find cointegrating relationships
+reg_co2_cpi <- lm(ts.co2~ts.cpi)
+reg_co2_dot <- lm(ts.co2~ts.dot.thou)
+reg_co2_ex <- lm(ts.co2~ts.ex)
+reg_co2_im <- lm(ts.co2~ts.im)
+
+intord(reg_co2_cpi$residuals)
+intord(reg_co2_dot$residuals)
+intord(reg_co2_ex$residuals)
+intord(reg_co2_im$residuals)
+intord(lm(ts.dot.thou~ts.ex)$residuals) #stationary with all four checks, ADF test statistic of -7.01
+intord(lm(ts.dot.thou~ts.im)$residuals) #stationary with all four checks, ADF test statistic of -3.86
+intord(lm(ts.ex~ts.im)$residuals)
+```
+
+**Stationarity checks on residuals from regressing DOT onto Export**
+
+```{r cointegration proof, include=T, message=FALSE}
+js_agg
+intord(lm(ts.dot.thou~ts.ex)$residuals)
+
+```
+
+|       With the Johansen test, we fail to reject the amount of co-integrated pairs is less than or equal to 2, indicating that there are 2 or less cointegrating relationships. This is verified through the Engle-Granger method where all possible pairs of variables were regressed on each other while testing for stationarity in the residuals of each regression. Non-stationarity was found in each pair of variables except for DOT on EXP and DOT on IMP. Our two pairs of cointegrated variables are between DOT and EXP, and DOT and IMP.
+
+
+#  (iii) Multivariate Model
+
+```{r VAR or VECM}
+agg_data <- cbind(ts.co2,ts.cpi,ts.ex,ts.im)
+VARselect(agg_data) #BIC prefers a VAR(5) model
+VARselect(agg_data,season = 12) #BIC prefers a VAR(2) model after correcting for seasonal dummies
+
+VAR(agg_data[,1:4], type = "const", lag.max = 24, ic = c("SC"), season = 12)$p 
+#VAR(2) suggested by BIC
+VAR(agg_data[,1:4], type = "const", lag.max = 24, ic = c("AIC"), season = 12)$p 
+#VAR(4) suggested by AIC
+
+vecm <- vec2var(js_agg)
+plot(irf(vecm, response = c("ts.co2","ts.cpi","ts.ex","ts.im"), 
+         n.ahead = 20,ortho = F, runs = 100))
+plot(irf(vecm, response = c("ts.dot.thou"), 
+         n.ahead = 20,ortho = F, runs = 100))
+
+var2 <- VAR(agg_data[,1:4], p = 2, type = 'none', season = 12, ic="SC")
+```
+
+|       Various VAR models are considered for the time series. Schwarz Criteria (SC) was used to pick the optimal lag length for a parsimonious model to reduce residual correlation as much as possible. A VAR(2) model had the lowest value of S
+Represented by the equation:
+$$
+\begin{pmatrix}
+co2{t}\\
+cpi_{t}\\
+exp_{t}\\
+imp_{t}\\
+\end{pmatrix} 
+= 
+\left[\begin{array}
+{rr}
+1.465 & 0.184 & 0.154 & .143\\
+-.003 & 1.319 & -.006 & -090\\
+-.013 & -.0119 & 1.313 & 0.142\\
+-.030 & .425 &.121 &1.209 \\
+\end{array}\right]
+\begin{pmatrix}
+co2{t}\\
+cpi_{t}\\
+exp_{t}\\
+imp_{t}\\
+\end{pmatrix} 
++
+\left[\begin{array}
+{rr}
+-.463 &-.188 &-.146 &-.129  \\
+.003 &-.316 &.002 &.081  \\
+.013 &.160 &-.316 &-.064  \\
+.026 &-.449 &-.146 &-.324  \\
+\end{array}\right]
+\begin{pmatrix}
+co2{t}\\
+cpi_{t}\\
+exp_{t}\\
+imp_{t}\\
+\end{pmatrix} 
++
+\begin{pmatrix}
+\epsilon_{co2,t}\\
+\epsilon_{cpi,t}\\
+\epsilon_{exp,t}\\
+\epsilon_{imp,t}\\
+\end{pmatrix} 
+$$
+
+with estimation results:
+```{r var estimation results, include=T}
+lmp <- var2$varresult
+```
+
+\newpage
+
+```{r stargaze1, include=T}
+stargazer(lmp$ts.co2, lmp$ts.cpi, lmp$ts.ex, lmp$ts.im,
+          type="text", 
+          dep.var.labels.include=F,
+          column.labels=c("Co2","CPI","DOT","EXP","IMP"),
+          omit = c("sd1","sd2","sd3","sd4","sd5",
+                   "sd6","sd7","sd8","sd9","sd10",
+                   "sd11"))
+```
+
+\newpage
+```{r stargaze2, include=F}
+stargazer(lmp$ts.ex, lmp$ts.im, 
+          type="text", 
+          dep.var.labels.include=F,
+          column.labels=c("Co2","CPI","DOT","EXP","IMP"),
+          omit = c("sd1","sd2","sd3","sd4","sd5",
+                   "sd6","sd7","sd8","sd9","sd10",
+                   "sd11")) 
+```
+\newpage
+#  (iv) Impulse Response Function
+|       An orthogonal impulse response function is compared with a non-orthogonal impulse response function for each variable. Looking 10 periods ahead with 1000 simulations, the following are plots showing one variable at a time with an exogenous shock.
+
+\\
+**Shocking Co2**
+
+```{r IRF of CO2, include=TRUE}
+RESPONSE = "ts.co2"
+IMPULSE = c("ts.co2","ts.cpi","ts.ex","ts.im")
+feir = lapply(IMPULSE,function(i){
+irf(var2,response=RESPONSE,impulse=i,
+n.ahead=10,ortho=FALSE,boot=TRUE,runs=100)
+})
+names(feir) = IMPULSE
+
+plotdf1 = lapply(names(feir),function(i){
+data.frame(
+  index = 1:nrow(feir[[i]]$irf[[1]]),
+  value=feir[[i]]$irf[[1]][,1],
+  Lower=feir[[i]]$Lower[[1]][,1],
+  Upper=feir[[i]]$Upper[[1]][,1],
+  Impulse = i)
+})
+plotdf1=do.call(rbind,plotdf1)
+
+oir = lapply(IMPULSE,function(i){
+irf(var2,response=RESPONSE,impulse=i,
+n.ahead=10,ortho=TRUE,boot=TRUE,runs=100)
+})
+names(oir) = IMPULSE
+
+plotdf2 = lapply(names(oir),function(i){
+data.frame(
+  index = 1:nrow(oir[[i]]$irf[[1]]),
+  value=oir[[i]]$irf[[1]][,1],
+  Lower=oir[[i]]$Lower[[1]][,1],
+  Upper=oir[[i]]$Upper[[1]][,1],
+  Impulse = i)
+})
+plotdf2=do.call(rbind,plotdf2)
+
+feir.co2 <- ggplot(plotdf1,aes(x=index,y=value)) + 
+geom_line() +facet_wrap(~Impulse) + 
+geom_ribbon(aes(ymin=Lower,ymax=Upper),
+            fill=NA,col="salmon",linetype="dashed") + 
+  geom_hline(yintercept=0,col="salmon") + theme_bw() +
+  ggtitle("Impulse Response")
+
+oir.co2 <- ggplot(plotdf2,aes(x=index,y=value)) + 
+geom_line() +facet_wrap(~Impulse) + 
+geom_ribbon(aes(ymin=Lower,ymax=Upper),
+            fill=NA,col="salmon",linetype="dashed") + 
+  geom_hline(yintercept=0,col="salmon") + theme_bw() +
+  ggtitle("Orthogonal Impulse Response")
+
+plot_grid(feir.co2, oir.co2)
+```
+
+|       From the above impulse response functions, we can see that a shock on Co2 does not have an effect on any of the other variables. However, it does not diminish over time and nearly doubles from the shocked value. A similar result is seen in the orthogonal with at a much smaller scaling.
+
+\newpage
+**Shocking CPI**
+
+```{r IRF of CPI, include=TRUE}
+RESPONSE = "ts.cpi"
+IMPULSE = c("ts.co2","ts.cpi","ts.ex","ts.im")
+feir = lapply(IMPULSE,function(i){
+irf(var2,response=RESPONSE,impulse=i,
+n.ahead=10,ortho=FALSE,boot=TRUE,runs=100)
+})
+names(feir) = IMPULSE
+
+plotdf1 = lapply(names(feir),function(i){
+data.frame(
+  index = 1:nrow(feir[[i]]$irf[[1]]),
+  value=feir[[i]]$irf[[1]][,1],
+  Lower=feir[[i]]$Lower[[1]][,1],
+  Upper=feir[[i]]$Upper[[1]][,1],
+  Impulse = i)
+})
+plotdf1=do.call(rbind,plotdf1)
+
+oir = lapply(IMPULSE,function(i){
+irf(var2,response=RESPONSE,impulse=i,
+n.ahead=10,ortho=TRUE,boot=TRUE,runs=100)
+})
+names(oir) = IMPULSE
+
+plotdf2 = lapply(names(oir),function(i){
+data.frame(
+  index = 1:nrow(oir[[i]]$irf[[1]]),
+  value=oir[[i]]$irf[[1]][,1],
+  Lower=oir[[i]]$Lower[[1]][,1],
+  Upper=oir[[i]]$Upper[[1]][,1],
+  Impulse = i)
+})
+plotdf2=do.call(rbind,plotdf2)
+
+feir.cpi <- ggplot(plotdf1,aes(x=index,y=value)) + 
+geom_line() +facet_wrap(~Impulse) + 
+geom_ribbon(aes(ymin=Lower,ymax=Upper),
+            fill=NA,col="salmon",linetype="dashed") + 
+  geom_hline(yintercept=0,col="salmon") + theme_bw() +
+  ggtitle("Impulse Response")
+
+oir.cpi <- ggplot(plotdf2,aes(x=index,y=value)) + 
+geom_line() +facet_wrap(~Impulse) + 
+geom_ribbon(aes(ymin=Lower,ymax=Upper),
+            fill=NA,col="salmon",linetype="dashed") + 
+  geom_hline(yintercept=0,col="salmon") + theme_bw() +
+  ggtitle("Orthogonal Impulse Response")
+
+plot_grid(feir.cpi, oir.cpi)
+
+```
+
+|       From the above impulse response functions, we can see that a shock on CPI has a minor effect on Co2 and EXP, increasing them by roughly 10% after 10 periods. IMP is seen increasing by 10% after only 3 periods, but returning to zero by the 10th period. In the non-orthogonal impulse response, EXP is seen to have a persistent effect from the CPI shock, as it seems to continually increase after the 10th period.
+
+```{r IRF of DOT, include=FALSE}
+#RESPONSE = "ts.dot.thou"
+#IMPULSE = c("ts.co2","ts.cpi","ts.dot.thou","ts.ex","ts.im")
+feir = lapply(IMPULSE,function(i){
+irf(var2,response=RESPONSE,impulse=i,
+n.ahead=10,ortho=FALSE,boot=TRUE,runs=100)
+})
+names(feir) = IMPULSE
+
+plotdf1 = lapply(names(feir),function(i){
+data.frame(
+  index = 1:nrow(feir[[i]]$irf[[1]]),
+  value=feir[[i]]$irf[[1]][,1],
+  Lower=feir[[i]]$Lower[[1]][,1],
+  Upper=feir[[i]]$Upper[[1]][,1],
+  Impulse = i)
+})
+plotdf1=do.call(rbind,plotdf1)
+
+oir = lapply(IMPULSE,function(i){
+irf(var2,response=RESPONSE,impulse=i,
+n.ahead=10,ortho=TRUE,boot=TRUE,runs=100)
+})
+names(oir) = IMPULSE
+
+plotdf2 = lapply(names(oir),function(i){
+data.frame(
+  index = 1:nrow(oir[[i]]$irf[[1]]),
+  value=oir[[i]]$irf[[1]][,1],
+  Lower=oir[[i]]$Lower[[1]][,1],
+  Upper=oir[[i]]$Upper[[1]][,1],
+  Impulse = i)
+})
+plotdf2=do.call(rbind,plotdf2)
+
+feir.dot <- ggplot(plotdf1,aes(x=index,y=value)) + 
+geom_line() +facet_wrap(~Impulse) + 
+geom_ribbon(aes(ymin=Lower,ymax=Upper),
+            fill=NA,col="salmon",linetype="dashed") + 
+  geom_hline(yintercept=0,col="salmon") + theme_bw() +
+  ggtitle("Impulse Response")
+
+oir.dot <- ggplot(plotdf2,aes(x=index,y=value)) + 
+geom_line() +facet_wrap(~Impulse) + 
+geom_ribbon(aes(ymin=Lower,ymax=Upper),
+            fill=NA,col="salmon",linetype="dashed") + 
+  geom_hline(yintercept=0,col="salmon") + theme_bw() +
+  ggtitle("Orthogonal Impulse Response")
+
+plot_grid(feir.dot, oir.dot)
+
+```
+
+\newpage
+**Shocking EXP**
+
+```{r IRF of EXP, include=TRUE, fig.width = 8, fig.height = 8}
+RESPONSE = "ts.ex"
+IMPULSE = c("ts.co2","ts.cpi","ts.ex","ts.im")
+feir = lapply(IMPULSE,function(i){
+irf(var2,response=RESPONSE,impulse=i,
+n.ahead=10,ortho=FALSE,boot=TRUE,runs=100)
+})
+names(feir) = IMPULSE
+
+plotdf1 = lapply(names(feir),function(i){
+data.frame(
+  index = 1:nrow(feir[[i]]$irf[[1]]),
+  value=feir[[i]]$irf[[1]][,1],
+  Lower=feir[[i]]$Lower[[1]][,1],
+  Upper=feir[[i]]$Upper[[1]][,1],
+  Impulse = i)
+})
+plotdf1=do.call(rbind,plotdf1)
+
+oir = lapply(IMPULSE,function(i){
+irf(var2,response=RESPONSE,impulse=i,
+n.ahead=10,ortho=TRUE,boot=TRUE,runs=100)
+})
+names(oir) = IMPULSE
+
+plotdf2 = lapply(names(oir),function(i){
+data.frame(
+  index = 1:nrow(oir[[i]]$irf[[1]]),
+  value=oir[[i]]$irf[[1]][,1],
+  Lower=oir[[i]]$Lower[[1]][,1],
+  Upper=oir[[i]]$Upper[[1]][,1],
+  Impulse = i)
+})
+plotdf2=do.call(rbind,plotdf2)
+
+feir.exp <- ggplot(plotdf1,aes(x=index,y=value)) + 
+geom_line() +facet_wrap(~Impulse) + 
+geom_ribbon(aes(ymin=Lower,ymax=Upper),
+            fill=NA,col="salmon",linetype="dashed") + 
+  geom_hline(yintercept=0,col="salmon") + theme_bw() +
+  ggtitle("Impulse Response")
+
+oir.exp <- ggplot(plotdf2,aes(x=index,y=value)) + 
+geom_line() +facet_wrap(~Impulse) + 
+geom_ribbon(aes(ymin=Lower,ymax=Upper),
+            fill=NA,col="salmon",linetype="dashed") + 
+  geom_hline(yintercept=0,col="salmon") + theme_bw() +
+  ggtitle("Orthogonal Impulse Response")
+
+plot_grid(feir.exp, oir.exp)
+
+```
+
+|       From the above impulse response functions, we can see that a shock on EXP does not in return have much of an effect on CPI. The resoonse to the other variables seems to generally decrease, with EXP, CPI and IMP seeming to continuously decrease after the 10th period. IMP increases slightly by the 3rd period, before changing direction and lowering in value by the 6th period. Similarly, there is a sharp increase in EXP by the 3rd period before it steadily decreases over time. 
+
+\newpage
+**Shocking IMP**
+
+```{r IRF of IMP, include=TRUE, fig.width = 9, fig.height = 9}
+RESPONSE = "ts.im"
+IMPULSE = c("ts.co2","ts.cpi","ts.ex","ts.im")
+feir = lapply(IMPULSE,function(i){
+irf(var2,response=RESPONSE,impulse=i,
+n.ahead=10,ortho=FALSE,boot=TRUE,runs=100)
+})
+names(feir) = IMPULSE
+
+plotdf1 = lapply(names(feir),function(i){
+data.frame(
+  index = 1:nrow(feir[[i]]$irf[[1]]),
+  value=feir[[i]]$irf[[1]][,1],
+  Lower=feir[[i]]$Lower[[1]][,1],
+  Upper=feir[[i]]$Upper[[1]][,1],
+  Impulse = i)
+})
+plotdf1=do.call(rbind,plotdf1)
+
+oir = lapply(IMPULSE,function(i){
+irf(var2,response=RESPONSE,impulse=i,
+n.ahead=10,ortho=TRUE,boot=TRUE,runs=100)
+})
+names(oir) = IMPULSE
+
+plotdf2 = lapply(names(oir),function(i){
+data.frame(
+  index = 1:nrow(oir[[i]]$irf[[1]]),
+  value=oir[[i]]$irf[[1]][,1],
+  Lower=oir[[i]]$Lower[[1]][,1],
+  Upper=oir[[i]]$Upper[[1]][,1],
+  Impulse = i)
+})
+plotdf2=do.call(rbind,plotdf2)
+
+feir.imp <- ggplot(plotdf1,aes(x=index,y=value)) + 
+geom_line() +facet_wrap(~Impulse) + 
+geom_ribbon(aes(ymin=Lower,ymax=Upper),
+            fill=NA,col="salmon",linetype="dashed") + 
+  geom_hline(yintercept=0,col="salmon") + theme_bw() +
+  ggtitle("Impulse Response")
+
+oir.imp <- ggplot(plotdf2,aes(x=index,y=value)) + 
+geom_line() +facet_wrap(~Impulse) + 
+geom_ribbon(aes(ymin=Lower,ymax=Upper),
+            fill=NA,col="salmon",linetype="dashed") + 
+  geom_hline(yintercept=0,col="salmon") + theme_bw() +
+  ggtitle("Orthogonal Impulse Response")
+
+plot_grid(feir.imp, oir.imp)
+
+```
+
+|       From the above impulse response functions, we can see that a shock on IMP has a striking similar response from both IMP and EXP, where they increase after 2 to 3 periods before decreasing over time. IMP does decrease at double the rate of EXP, but neither reaches zero after 10 periods. Co2 seems to steadily increase over time from the shock, but at a relatively slow rate increasing by less than .04 after 10 periods.  CPI also decreases to -.05 after 10 periods.
+|       In summary, the scaling of the impulse response functions were very small, ranging between -.1 to .4. There doesn't seem to be any persistent effects from any of the exogenous shocks except for imports, which still was of a small scale decreasing by 1.5 over 10 periods. Most importantly, Co2 did not have a strong relationship as a response to any of the impulses. 
+
+\newpage
+```{r forecast error impulse response, include=FALSE}
+#notes
+# Obtain variance-covariance matrix
+model_summary <- summary(var2)
+model_summary$covres
+#However, those matrices only describe the correlation between the errors, but it remains unclear in which direction the causalities go. Identifying these causal relationships is one of the main challenges of any VAR analysis.
+
+t(chol(model_summary$covres))
+
+#orthogonal IR
+oir <- irf(var2, impulse = "ts.co2", response = "ts.cpi",
+           n.ahead = 8, ortho = TRUE, runs = 100, seed = 8675309)
+
+plot(oir)
+#Therefore, the results of an OIR might be sensitive to the order of the variables and it is
+#advised to estimate the above VAR model with different orders to see how strongly the 
+#resulting OIRs are affected by that.
+
+
+```
+
+|       From the above impulse response functions, we can see that a shock on Co2 does not have an effect on any of the other variables. It stays steady at 
+\newpage
+#  (v) Forecast Error Variance Decomposition
+*Provide a table with the forecast error variance decompositions and provide a brief write up regarding the interpretation of these decompositions.*
+
+```{r FEVD presented by stargazer, include= TRUE}
+error_decomp <- fevd(var2,n.ahead = 5)
+shock_co2 <- error_decomp$ts.co2[1:4,]
+colnames(shock_co2) <- c('Co2','CPI','EXP','IMP')
+stargazer(shock_co2[,1:4], type="text", title="Shock Co2 on")
+
+shock_cpi <- error_decomp$ts.cpi[1:4,]
+colnames(shock_cpi) <- c('Co2','CPI','EXP','IMP')
+stargazer(shock_cpi[,1:4], type="text", title="Shock CPI on")
+
+#shock_dot <- error_decomp$ts.dot.thou[1:4,]
+#colnames(shock_dot) <- c('Co2','CPI','DOT','EXP','IMP')
+#stargazer(shock_dot[,1:5], type="text", title="Shock DOT on")
+
+shock_ex <- error_decomp$ts.ex[1:4,]
+colnames(shock_ex) <- c('Co2','CPI','EXP','IMP')
+stargazer(shock_ex[,1:4], type="text", title="Shock EXP on")
+
+shock_im <- error_decomp$ts.im[1:4,]
+colnames(shock_im) <- c('Co2','CPI','EXP','IMP')
+stargazer(shock_im[,1:4], type="text", title="Shock IMP on")
+```
+
+|       Except for imports, the forecast error variance decomposition shows that the variables do not contribute to each other at all. This was seen with the impulse response function from the previous section, where the shock on import had a similar effect between export and import. The opposite is not true, where a shock to export will cause a large change on imports. Most importantly, is that the shock on Co2 and responses from Co2 from the varying shocks have a very minimal relationship. 
+
+\newpage
+#  Appendix
+```{r, ref.label=knitr::all_labels(),echo=TRUE,eval=FALSE,tidy=TRUE,include=TRUE}
+```
+
