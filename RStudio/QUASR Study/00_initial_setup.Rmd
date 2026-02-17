@@ -1,0 +1,239 @@
+---
+title: "QUASR Study - Setup, Environment, and Project Scaffold"
+output:
+  pdf_document:
+    toc: true
+date: "2026-02-16"
+geometry: margin=1in
+---
+# 0. How To Use This Document
+
+## 0.1 Purpose
+
+This document initializes the QUASR Study project environment and folder scaffold.  
+Running this file should recreate the project structure and verify the local R environment.
+
+---
+
+## 0.2 What This PDF Represents
+
+This PDF is a rendered snapshot of:  
+- System environment state  
+- Project directory structure  
+- Reproducibility metadata  
+- Setup verification outputs
+
+The source `.Rmd` file is the executable version.  
+The PDF is documentation only.
+
+---
+
+## 0.3 How To Knit To PDF (RStudio)
+
+Open this `.Rmd` in RStudio.
+
+Click:
+```
+Knit → Knit to PDF
+```
+
+If prompted to install LaTeX → allow install.
+
+Output PDF will be written to:
+```
+reports/
+```
+
+---
+
+## 0.4 Required Package Install (Run Once Per Machine)
+
+```{r}
+required_packages <- c(
+  "tinytex",
+  "rmarkdown",
+  "knitr"
+)
+
+new_packages <- required_packages[!(required_packages %in% installed.packages()[,"Package"])]
+
+if(length(new_packages)) install.packages(new_packages)
+```
+
+---
+
+# 1. Pipeline Execution Order (5 Total RMD Scripts)
+
+The full QUASR workflow is executed through five staged R Markdown scripts.
+
+## 1.1 00_initial_setup.Rmd
+Initializes environment, folder scaffold, and reproducibility setup.
+
+## 1.2 01_data_ingestion_and_validation.Rmd
+Pulls raw data from source systems and performs structural validation checks.
+
+## 1.3 02_processed_dataset_build.Rmd
+Transforms raw data into cleaned, standardized, model-ready datasets.
+
+## 1.4 03_model_pipeline.Rmd
+Executes model logic and produces intermediate model outputs.
+
+## 1.5 04_outputs_and_validation.Rmd
+Generates final tables, figures, and model validation diagnostics.
+
+---
+
+# 2. Environment Verification
+
+## 2.1 R Version
+
+```{r}
+R.version.string
+```
+
+---
+
+## 2.2 Working Directory
+
+```{r}
+getwd()
+```
+
+Expected example:
+```
+C:/Users/whoeltermann/OneDrive/Sample Works/RStudio/QUASR Study
+```
+
+---
+
+# 3. Project Scaffold Creation
+
+## 3.1 Create Standard Project Structure
+
+```{r}
+dir.create("src", recursive = TRUE, showWarnings = FALSE)
+dir.create("data/raw", recursive = TRUE, showWarnings = FALSE)
+dir.create("data/processed", recursive = TRUE, showWarnings = FALSE)
+dir.create("reports", recursive = TRUE, showWarnings = FALSE)
+dir.create("scripts", recursive = TRUE, showWarnings = FALSE)
+```
+
+---
+
+## 3.2 Verify Directory Structure
+
+```{r}
+list.dirs(recursive = TRUE)
+```
+
+---
+
+# 4. Repository Conventions
+
+## 4.1 Code Locations
+- `src/` → reusable functions
+- `scripts/` → run scripts
+- `reports/` → R Markdown reports
+
+## 4.2 Data Locations
+- `data/raw/` → raw external data
+- `data/processed/` → model-ready data
+
+---
+
+# 5. Git & Reproducibility Rules
+
+## 5.1 Files That MUST Be Committed
+- README.md
+- .gitignore
+- .Rproj file
+- reports/*.Rmd
+- src/
+- scripts/
+
+## 5.2 Files That MUST NOT Be Committed
+- data/raw/*
+- data/processed/*
+- .env
+- renv/library/
+- .Rproj.user/
+
+---
+
+# 6. Required .gitignore Contents
+
+```text
+# R
+.Rhistory
+.RData
+.Ruserdata
+
+# RStudio
+.Rproj.user
+
+# Data
+data/raw/*
+data/processed/*
+
+# Secrets
+.env
+
+# Reports
+reports/*.html
+
+# OS
+.DS_Store
+Thumbs.db
+```
+
+---
+
+# 7. Dependency Management Plan (renv)
+
+We will use renv for reproducible package environments.
+
+Planned commands (do not run until Step 2):
+
+```text
+install.packages("renv")
+renv::init()
+```
+
+---
+
+# 8. Project Workflow
+
+## 8.1 Environment + Scaffold
+- R / RStudio verified
+- Git initialized
+- Folder structure created
+- Setup documented in this file
+
+## 8.2 Data Connectivity Test
+- Validate API / source access
+- Validate write permissions
+- Produce small test output (CSV)
+
+## 8.3 Raw Data Ingestion
+- Pull full datasets / series
+- Store unmodified data in `data/raw/`
+
+## 8.4 Processed Dataset Build
+- Clean fields
+- Standardize units
+- Handle missing values
+- Create derived variables
+- Output to `data/processed/`
+
+## 8.5 Modeling + Outputs
+- Run model pipeline
+- Generate tables / plots / summaries
+- Ensure reproducibility from raw data + code
+
+---
+
+# 9. Reproducibility Metadata
+
+```{r}
+sessionInfo()
+```

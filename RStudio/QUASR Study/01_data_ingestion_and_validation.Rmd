@@ -1,0 +1,447 @@
+---
+title: "QUASR Study - Data Ingestion and Validation"
+author: "Wataru J Hoeltermann"
+date: "2026-02-15"
+output:
+  pdf_document:
+    toc: true
+geometry: margin=1in
+---
+
+```{r}
+required_packages <- c("httr", "readr", "dplyr", "jsonlite", "digest","lubridate")
+cran_repo <- "https://cloud.r-project.org"
+new_packages <- required_packages[!(required_packages %in% installed.packages()[,"Package"])]
+if (length(new_packages)) install.packages(new_packages, repos = cran_repo)
+invisible(lapply(required_packages, library, character.only = TRUE))
+```
+
+# 0. Purpose
+
+Pull raw data from source systems and perform structural validation checks.  
+Outputs raw data artifacts to `data/raw/`.
+
+***
+
+
+# 1. Data Context and Source Candidates
+
+## 1.1 Target Analytical Data (Planned Use)
+
+Primary data categories expected for this project:
+
+- Core outcome variables (model dependent)
+- Exposure / treatment variables (if applicable)
+- Time index variables (date, period, cohort, etc.)
+- Geographic identifiers (if applicable)
+- Control covariates required for model stability
+
+***
+
+## 1.2 Confirmed / Selected Data Sources
+
+| Source Name | Owner / Agency | Access Type | Notes |
+|---|---|---|---|
+| NOAA Climate Data API | NOAA (National Oceanic and Atmospheric Administration) | API | Primary environmental / climate data input via programmatic pull |
+
+
+***
+
+## 1.3 Candidate / Evaluated Data Sources
+
+These are sources evaluated during project design.  
+Not all will necessarily be used in production.
+
+| Source Name | Owner / Agency | Reason Considered | Status |
+|---|---|---|---|
+| TBD | TBD | Potential primary signal | Under review |
+| TBD | TBD | Supplemental covariates | Optional |
+| TBD | TBD | Historical comparison | Backup |
+
+***
+
+## 1.4 Data Selection Rationale (Working Notes)
+
+Selection criteria:
+
+- Data completeness across time
+- Stable schema / low structural drift
+- Reasonable update frequency
+- Documented methodology
+- Reproducible access method
+
+***
+
+## 1.5 Expected Data Shape (Initial Assumptions)
+
+| Component | Expected Form |
+|---|---|
+| Time Field | Date or Year-Month |
+| Observation Unit | Record / Entity / Aggregate |
+| Missingness | Low to Moderate |
+| Volume | TBD |
+
+***
+
+## 1.6 Known Risks or Constraints (Initial)
+
+- Potential schema drift across years
+- Possible missing fields in early periods
+- Potential API rate limits (if applicable)
+- Possible licensing or redistribution limits
+
+***
+
+## 1.7 Source Link Registry (To Be Filled)
+
+```text
+PRIMARY SOURCE:
+[TBD LINK]
+
+SECONDARY SOURCE:
+[TBD LINK]
+
+SUPPLEMENTAL / OPTIONAL:
+[TBD LINK]
+```
+***
+
+# 2. Output Paths
+
+```{r}
+raw_dir <- "data/raw"
+
+if(!dir.exists(raw_dir)) dir.create(raw_dir, recursive = TRUE)
+
+run_date <- format(Sys.Date(), "%Y_%m_%d")
+```
+
+***
+
+# 3. Data Source Pull (API / External Systems)
+
+## 3.1 NOAA API Pull
+
+```{r}
+# ---- NOAA pull parameters (edit here only) ----
+noaa_station_id  <- "8722670"  # Lake Worth Pier (example)
+noaa_begin_date  <- "20090101"
+noaa_end_date    <- "20191231"
+
+noaa_product     <- "monthly_mean"
+noaa_datum       <- "MSL"
+noaa_time_zone   <- "GMT"
+noaa_units       <- "metric"
+noaa_format      <- "csv"
+
+# Optional: tag used by NOAA for usage tracking / identification
+noaa_application <- "seawall_research"
+```
+
+```{r}
+# NOAA CO-OPS API pull (public; no API key required)
+base_url <- "https://api.tidesandcurrents.noaa.gov/api/prod/datagetter"
+
+params <- list(
+  product     = noaa_product,
+  application = noaa_application,
+  begin_date  = noaa_begin_date,
+  end_date    = noaa_end_date,
+  datum       = noaa_datum,
+  station     = noaa_station_id,
+  time_zone   = noaa_time_zone,
+  units       = noaa_units,
+  format      = noaa_format
+)
+
+response <- httr::GET(base_url, query = params)
+httr::stop_for_status(response)
+
+raw_text <- httr::content(response, as = "text", encoding = "UTF-8")
+
+# NOAA returns CSV as text; readr can parse from string
+raw_data <- readr::read_csv(raw_text, show_col_types = FALSE) %>%
+  dplyr::mutate(
+    station_id      = params$station,
+    pull_begin_date = params$begin_date,
+    pull_end_date   = params$end_date,
+    pulled_at_utc   = format(as.POSIXct(Sys.time(), tz = "UTC"), "%Y-%m-%dT%H:%M:%SZ")
+  )
+
+if (nrow(raw_data) == 0) {
+  stop("NOAA API returned zero rows. Check station ID, date range, or product.")
+}
+```
+
+***
+
+
+## 3.2 Save Raw Output
+
+```{r}
+# assumes raw_dir + run_date exist earlier in the document
+raw_file <- file.path(
+  raw_dir,
+  paste0("noaa_", noaa_product, "_station_", unique(raw_data$station_id), "_", run_date, ".csv")
+)
+
+readr::write_csv(raw_data, raw_file)
+
+raw_file
+```
+
+***
+
+## 3.3 Save Pull Metadata
+
+```{r}
+# Store metadata alongside raw pulls (keeps reproducibility artifacts together)
+meta_dir <- file.path(raw_dir, "meta")
+dir.create(meta_dir, recursive = TRUE, showWarnings = FALSE)
+
+# Hash the saved CSV so you can confirm exact file integrity later
+raw_file_sha256 <- digest::digest(file = raw_file, algo = "sha256")
+
+meta <- list(
+  source = "NOAA CO-OPS (Tides & Currents) datagetter",
+  base_url = base_url,
+  query_params = params,
+  output_file = raw_file,
+  output_file_sha256 = raw_file_sha256,
+  run_date = run_date,
+  pulled_at_utc = format(as.POSIXct(Sys.time(), tz = "UTC"), "%Y-%m-%dT%H:%M:%SZ"),
+  session = list(
+    r_version = as.character(getRversion()),
+    platform = R.version$platform
+  )
+)
+
+meta_file <- file.path(
+  meta_dir,
+  paste0("noaa_", noaa_product, "_station_", noaa_station_id, "_", run_date, "_meta.json")
+)
+
+jsonlite::write_json(meta, meta_file, pretty = TRUE, auto_unbox = TRUE)
+
+meta_file
+```
+
+***
+
+## 3.4 Ingestion Verification (Data Preview)
+
+```{r}
+cat("\n---- NOAA RAW DATA PREVIEW ----\n")
+cat("Rows:", nrow(raw_data), "\n")
+cat("Columns:", ncol(raw_data), "\n\n")
+
+cat("Column Names:\n")
+print(names(raw_data))
+
+cat("\nTop 5 Rows:\n")
+print(utils::head(raw_data, 5))
+```
+
+***
+
+## 3.5 Data Dictionary and Validation Summary
+
+```{r}
+library(dplyr)
+library(tidyr)
+library(knitr)
+
+# -----------------------------
+# 1. RUN METADATA TABLE
+# -----------------------------
+run_meta <- data.frame(
+  Field = c(
+    "Source",
+    "Station",
+    "Product",
+    "Begin Date",
+    "End Date",
+    "Pulled At (UTC)",
+    "Output File"
+  ),
+  Value = c(
+    "NOAA CO-OPS datagetter",
+    unique(raw_data$station_id)[1],
+    noaa_product,
+    noaa_begin_date,
+    noaa_end_date,
+    format(Sys.time(), "%Y-%m-%dT%H:%M:%SZ"),
+    raw_file
+  )
+)
+
+kable(run_meta, caption = "Run Metadata")
+
+# -----------------------------
+# 2. STRUCTURAL SUMMARY (NO STATUS)
+# -----------------------------
+structural_summary <- data.frame(
+  Metric = c(
+    "Row Count",
+    "Column Count",
+    "Total Missing Cells",
+    "Duplicate Rows"
+  ),
+  Value = c(
+    nrow(raw_data),
+    ncol(raw_data),
+    sum(is.na(raw_data)),
+    sum(duplicated(raw_data))
+  )
+)
+
+kable(structural_summary, caption = "Structural Summary")
+
+# -----------------------------
+# 3. DATA DICTIONARY
+# -----------------------------
+data_dictionary <- data.frame(
+  column = names(raw_data),
+  type = sapply(raw_data, function(x) class(x)[1]),
+  sample_value = sapply(raw_data, function(x) {
+    val <- x[!is.na(x)][1]
+    if (length(val) == 0) return(NA)
+    as.character(val)
+  })
+)
+
+kable(data_dictionary, caption = "Data Dictionary")
+
+# -----------------------------
+# 4. MISSINGNESS SUMMARY
+# -----------------------------
+missing_summary <- data.frame(
+  column = names(raw_data),
+  n_missing = sapply(raw_data, function(x) sum(is.na(x))),
+  pct_missing = round(
+    sapply(raw_data, function(x) mean(is.na(x))) * 100,
+    2
+  )
+)
+
+kable(missing_summary, caption = "Missingness Summary")
+
+# -----------------------------
+# 5. NUMERIC RANGE SUMMARY
+# -----------------------------
+numeric_cols <- raw_data %>%
+  select(where(is.numeric))
+
+if (ncol(numeric_cols) > 0) {
+
+  numeric_summary <- numeric_cols %>%
+    summarise(across(
+      everything(),
+      list(
+        min = ~min(.x, na.rm = TRUE),
+        p25 = ~quantile(.x, 0.25, na.rm = TRUE),
+        median = ~median(.x, na.rm = TRUE),
+        p75 = ~quantile(.x, 0.75, na.rm = TRUE),
+        max = ~max(.x, na.rm = TRUE)
+      ),
+      .names = "{.col}_{.fn}"
+    )) %>%
+    pivot_longer(
+      everything(),
+      names_to = c("column", "stat"),
+      names_sep = "_"
+    ) %>%
+    pivot_wider(names_from = stat, values_from = value)
+
+  kable(numeric_summary, caption = "Numeric Range Summary")
+
+} else {
+  cat("No numeric columns detected.\n")
+}
+```
+
+***
+# 4. Structural Validation Checks
+
+## 4.1 Row Count
+```{r}
+nrow(raw_data)
+```
+
+***
+## 4.2 Column Names
+
+```{r}
+colnames(raw_data)
+```
+
+***
+
+## 4.3 Missing Value Summary
+
+```{r}
+colSums(is.na(raw_data))
+```
+
+***
+
+## 4.4 Data Type Summary
+
+```{r}
+str(raw_data)
+```
+
+***
+
+# 5. Date Range Check (If Date Field Exists)
+
+```{r}
+date_columns <- names(raw_data)[sapply(raw_data, lubridate::is.Date)]
+
+date_columns
+```
+
+***
+
+# 6. Validation Flags
+
+```{r}
+validation_summary <- list(
+  rows = nrow(raw_data),
+  columns = ncol(raw_data),
+  missing_total = sum(is.na(raw_data)),
+  output_file = raw_file
+)
+
+validation_summary
+```
+
+***
+
+# 7. Output Summary
+
+```{r}
+cat("Raw data written to:", raw_file, "\n")
+cat("Rows:", nrow(raw_data), "\n")
+cat("Columns:", ncol(raw_data), "\n")
+```
+
+***
+
+# 8. Notes
+
+Replace Section 3 pull logic with production data source:
+- API call
+- Database query
+- Authenticated download
+- Internal data export
+
+Do not transform raw data here beyond format needed to store.
+
+***
+
+# 9. Session Info
+
+```{r}
+sessionInfo()
+```

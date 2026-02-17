@@ -1,0 +1,23 @@
+{
+  "source": "NOAA CO-OPS (Tides & Currents) datagetter",
+  "base_url": "https://api.tidesandcurrents.noaa.gov/api/prod/datagetter",
+  "query_params": {
+    "product": "monthly_mean",
+    "application": "seawall_research",
+    "begin_date": "20090101",
+    "end_date": "20191231",
+    "datum": "MSL",
+    "station": "8722670",
+    "time_zone": "GMT",
+    "units": "metric",
+    "format": "csv"
+  },
+  "output_file": "data/raw/noaa_monthly_mean_station_8722670_2026_02_16.csv",
+  "output_file_sha256": "bd18d45ec381591a747139972bc4e75880785d466df16d13e873fe5927510908",
+  "run_date": "2026_02_16",
+  "pulled_at_utc": "2026-02-16T21:44:55Z",
+  "session": {
+    "r_version": "4.5.2",
+    "platform": "x86_64-w64-mingw32"
+  }
+}
