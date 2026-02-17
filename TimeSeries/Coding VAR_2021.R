@@ -112,3 +112,4 @@ plot(irf(x = var_model_one, impulse = 'Series_X',n.ahead = 20,
 ##Statistical significance: For most of the horizon, the lower confidence band stays above zero, implying the response is statistically significant at the 5% level. Around periods 8–10, the lower band approaches zero, suggesting weaker significance in that window.
 ##Stability: The response gradually declines and does not explode, consistent with a stable VAR system.
 ##Economically, this suggests that a positive inflation shock leads to a sustained increase in the policy rate, consistent with a systematic monetary reaction function.
+
