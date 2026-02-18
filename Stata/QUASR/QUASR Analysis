@@ -38,6 +38,7 @@ twoway (connect lprice date if id == 1, msymbol(circle_hollow) mcolor(gray))(con
 twoway (connect lprice date if id == 1, msymbol(circle_hollow) mcolor(gray))(connect lprice date if id == 2, msymbol(circle_hollow) mcolor(blue)) if policy_type >= 18 & policy_type < 22, by(policy_type) saving(resident3,replace) legend(off) xline(19813, lpattern(dash) lcolor(red))
 twoway (connect lprice date if id == 1, msymbol(circle_hollow) mcolor(gray))(connect lprice date if id == 2, msymbol(circle_hollow) mcolor(blue)) if policy_type >= 0 & policy_type < 5, by(policy_type) saving(commer1,replace) legend(off) xline(19813, lpattern(dash) lcolor(red))
 gr combine commer1.gph resident1.gph resident2.gph resident3.gph
+*Parallel trends mostly ok at high level but not clean across all policy types. Drift depending on segment.
 
 *equation 1.1 on all
 drop _all
@@ -47,6 +48,7 @@ gen DiD = SLRpolicy*16.county_id
 reg lprice SLRpolicy 16.county_id DiD
 *checking for normality
 predict r, residual
+*Baseline DiD ran fine but treatment effect bounced around depending on spec, weak signal.
 rvfplot, saving(r1,replace) title("Residual v. Fitted")
 kdensity r, normal saving(r4,replace) title("Kernel Density")
 pnorm r, saving(r2,replace) title("Normal Probability")
@@ -64,6 +66,7 @@ keep if id == 1 | id == 2
 drop if yr <= 2010
 gen DiD = SLRpolicy*16.county_id
 reg lprice SLRpolicy 16.county_id DiD
+*still noisy despite treated vs closest comparison counties. Direction makes sense though.
 
 *insignificant results using all policy types
 reg lprice SLRpolicy 16.county_id DiD if policy_type >= 10
@@ -89,7 +92,7 @@ qnorm r, saving(r3,replace) title("Normal Quantile")
 gr combine r1.gph r2.gph r3.gph r4.gph, title("Normality in Residuals")
 swilk r
 drop r
-
+*FE model has the cleanest spec
 
 
 *
@@ -140,4 +143,3 @@ reg lprice slr slr_perc_pop i.id
 
 
 *as the ratio of percent of homeowners below 4ft MSL increases by 1%, the insurance premium rate increases by 1%.
-
