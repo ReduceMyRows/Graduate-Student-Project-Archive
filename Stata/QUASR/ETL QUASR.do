@@ -1,4 +1,4 @@
-cd "\\Client\C$\Users\jhoel\Google Drive\School\2020 Spring\ECON6375 Econometrics\Research Paper\Stata Data"
+cd "\\Client\C$\Users\...\Stata Data"
 clear
 local myfilelist : dir . files"*.csv"
 
