@@ -5,18 +5,18 @@ local myfilelist : dir . files"*.csv"
 foreach file of local myfilelist {
 drop _all
 import delimited `file', varnames(3) encoding(UTF-8) clear
+
+*capture source file name, convert to numeric county key, drop raw string id
 gen id = "`file'"
 encode(id), gen(county)
 drop id
 
 *convert to date
-destring textbox7, generate(date2) ignore("Period Ending" "/")
-generate date3 = string(date2, "%08.0f")
-generate date = date(date3,"MDY")
+replace textbox7 = subinstr(textbox7,"Period Ending","",.)
+replace textbox7 = subinstr(textbox7,"/","",.)
+gen date = date(textbox7,"MDY")
 format date %td
 drop textbox7
-drop date2
-drop date3
 
 *convert dummy
 encode policy_type_nm, generate(policy_type)
@@ -41,9 +41,6 @@ drop textbox*
 
 *label, too much work though
 label variable pif_tot "Policies in Force"
-label variable churr_tot "Policies Cancelled due to Hurricane Risk"
-
-label variable pif_tot "Policies in force"
 label variable can_tot "Number of policies canceled"
 label variable nonr_tot "Number of policies nonrenewed"
 label variable churr_tot "Number of policies canceled due to hurricane risk"
@@ -104,8 +101,12 @@ replace county = "polk" if id==22
 replace county = "sarasota" if id==23
 replace county = "st lucie" if id==24
 
+label values id county_lbl
+
+
 *add percentage of population with property less than 4 ft above mean sea level according to 2010 Census
-gen slr_perc_pop = 12.5 if county == "broward"
+gen slr_perc_pop = .
+replace slr_perc_pop = 12.5 if county == "broward"
 replace slr_perc_pop = 0.3 if county == "hendry"
 replace slr_perc_pop = 2.5 if county == "hillsborough" 
 replace slr_perc_pop = 6.1 if county == "lee"
