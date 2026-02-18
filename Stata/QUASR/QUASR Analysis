@@ -1,0 +1,143 @@
+cd "\\Client\C$\Users\jhoel\Google Drive\School\2020 Spring\ECON6375 Econometrics\Research Paper\Stata Data"
+drop _all
+use QSRmaster
+
+*add missing
+gen housingeffect = 1 if date>td(10jan2008)
+replace housingeffect = 0 if date<td(10jan2008)
+gen SLRpolicy = 1 if date>td(03mar2014)
+replace SLRpolicy = 0 if missing(SLRpolicy)
+label variable SLRpolicy "Resolution R-451-14 enacted May 6, 2014"
+encode(county), gen(county_id)
+gen datecode = date
+format datecode = %10.0g
+
+*rate of policies with wind coverage
+gen wind_rate = pif_inw/pif_tot
+replace wind_rate = 0 if missing(wind_rate)
+
+*log form
+gen lprice = ln(prem_pc)
+replace lprice = 0 if missing(lprice)
+gen lpif = ln(pif_tot)
+replace lpif = 0 if missing(lpif)
+gen lcan = ln(can_tot)
+replace lcan = 0 if missing(lcan)
+gen lnonr = ln(nonr_tot)
+replace lnonr = 0 if missing(lnonr)
+
+*add year and month
+gen yr = year(date)
+gen month = month(date)
+save QSRmaster, replace
+
+*searching for parallel trends
+browse datecode date if yr == 2014
+twoway (connect lprice date if id == 1, msymbol(circle_hollow) mcolor(gray))(connect lprice date if id == 2, msymbol(circle_hollow) mcolor(blue)) if policy_type >= 10 & policy_type < 14, by(policy_type) saving(resident1,replace) legend(off) xline(19813, lpattern(dash) lcolor(red))
+twoway (connect lprice date if id == 1, msymbol(circle_hollow) mcolor(gray))(connect lprice date if id == 2, msymbol(circle_hollow) mcolor(blue)) if policy_type >= 14 & policy_type < 18, by(policy_type) saving(resident2,replace) legend(off) xline(19813, lpattern(dash) lcolor(red))
+twoway (connect lprice date if id == 1, msymbol(circle_hollow) mcolor(gray))(connect lprice date if id == 2, msymbol(circle_hollow) mcolor(blue)) if policy_type >= 18 & policy_type < 22, by(policy_type) saving(resident3,replace) legend(off) xline(19813, lpattern(dash) lcolor(red))
+twoway (connect lprice date if id == 1, msymbol(circle_hollow) mcolor(gray))(connect lprice date if id == 2, msymbol(circle_hollow) mcolor(blue)) if policy_type >= 0 & policy_type < 5, by(policy_type) saving(commer1,replace) legend(off) xline(19813, lpattern(dash) lcolor(red))
+gr combine commer1.gph resident1.gph resident2.gph resident3.gph
+
+*equation 1.1 on all
+drop _all
+use QSRmaster
+drop if id == 0
+gen DiD = SLRpolicy*16.county_id
+reg lprice SLRpolicy 16.county_id DiD
+*checking for normality
+predict r, residual
+rvfplot, saving(r1,replace) title("Residual v. Fitted")
+kdensity r, normal saving(r4,replace) title("Kernel Density")
+pnorm r, saving(r2,replace) title("Normal Probability")
+qnorm r, saving(r3,replace) title("Normal Quantile")
+gr combine r1.gph r2.gph r3.gph r4.gph, title("Normality in Residuals")
+swilk r
+drop r
+
+*equation 1.1
+drop _all
+use QSRmaster
+*broward/miami
+keep if id == 1 | id == 2
+*drop 2009/2011 for not having all policy_types
+drop if yr <= 2010
+gen DiD = SLRpolicy*16.county_id
+reg lprice SLRpolicy 16.county_id DiD
+
+*insignificant results using all policy types
+reg lprice SLRpolicy 16.county_id DiD if policy_type >= 10
+reg lprice SLRpolicy 16.county_id DiD if policy_type >= 10, r
+predict resdid
+reg lprice SLRpolicy 16.county_id DiD if policy_type < 10
+reg lprice SLRpolicy 16.county_id DiD if policy_type < 10, r
+predict comdid
+twoway (scatter lprice date if id == 1, msymbol(circle_hollow) mcolor(gray))(scatter lprice date if id == 2, msymbol(circle_hollow) mcolor(blue))(line resdid date if id == 1)(line resdid date if id == 2) if policy_type >= 10, saving(resid,replace) legend(off) xline(19813, lpattern(dash) lcolor(red))
+twoway (scatter lprice date if id == 1, msymbol(circle_hollow) mcolor(gray))(scatter lprice date if id == 2, msymbol(circle_hollow) mcolor(blue))(line comdid date if id == 1)(line comdid date if id == 2) if policy_type < 10, saving(commer,replace) legend(off) xline(19813, lpattern(dash) lcolor(red))
+
+*equation 1.2
+reg lprice SLRpolicy 16.county_id DiD i.policy_type, r
+predict fedid
+
+twoway (scatter lprice date if id == 1, msymbol(circle_hollow) mcolor(gray))(scatter lprice date if id == 2, msymbol(circle_hollow) mcolor(blue))(line fedid date if id == 1, lcol(gray))(line fedid date if id == 2, lcol(blue)) if policy_type == 18, saving(fedid,replace) legend(label(1 "Miami") label(2 "Broward") label(3 "Predicted Values") label(4 "Predicted Values")) xline(19813, lpattern(dash) lcolor(red)) title("DiD with Policy Type as Fixed Effects") subtitle("Personal Residential Homeowners") ytitle("% Change in Insurance Premium")
+
+predict r, residual
+rvfplot, saving(r1,replace) title("Residual v. Fitted")
+kdensity r, normal saving(r4,replace) title("Kernel Density")
+pnorm r, saving(r2,replace) title("Normal Probability")
+qnorm r, saving(r3,replace) title("Normal Quantile")
+gr combine r1.gph r2.gph r3.gph r4.gph, title("Normality in Residuals")
+swilk r
+drop r
+
+
+
+*
+gen effect = 1 if date>td(03mar2014)
+replace effect = 0 if missing(effect)
+gen trend = date - td(03mar2014)
+
+reg prem_pc effect pif_tot, r
+predict linearpif
+
+
+
+twoway(line linear date)(scatter avgdate date, msymbol(circle_hollow) mcolor(gray)), legend(off) title("Single Linear RD")
+
+reg prem_pc effect 16.county_id
+predict miamitrend
+reg prem_pc i.date
+twoway(line miamitrend size)(scatter avedate size, msymbol(circle_hollow) mcolor(gray)), legend(off) title("Single Linear RD")
+
+
+*looking for parallel trends
+gen pretrend = prem_pc if SLRpolicy == 0
+gen posttrend = prem_pc if SLRpolicy == 1 
+twoway (scatter prem_pc date)(line prem_pc date), by(county_id)
+twoway (line pretrend date)(line posttrend date), by(county_id)
+
+
+gen pre = lprice if SLRpolicy == 0
+gen post = lprice if SLRpolicy == 1
+twoway (line pre date if policy_type == 18)(line post date if policy_type == 18), by(county_id)
+*maybe broward & collier as a control
+
+
+
+*linear form has misspecification
+reg prem_pc SLRpolicy slr_perc_pop DiD, r 
+
+*log form
+reg lprice SLRpolicy slr_perc_pop DiD, r
+
+egen avg = mean(prem_pc), by(county)
+gen demean = prem_pc-avg
+
+gen miami = 1 if county == "miami dade"
+replace miami = 0 if missing(miami)
+
+reg lprice slr slr_perc_pop i.id
+
+
+*as the ratio of percent of homeowners below 4ft MSL increases by 1%, the insurance premium rate increases by 1%.
+
