@@ -1,0 +1,42 @@
+#gitignore for Graduate-Student-Project-Archive
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Folder Toggle (remove # to enable)
+# Python/
+# Python Jupyter/
+RStudio/
+# RStudio-TimeSeries/
+# Stata/
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+env/
+.ipynb_checkpoints/
+
+# Data
+data/raw/
+data/processed/
+
+# Logs
+*.log
+*.tmp
+
+# R
+.Rhistory
+.RData
+.Rproj.user/
+
+# Stata
+*.smcl
+*.log
+
+# IDE
+.vscode/
+.idea/
