@@ -26,7 +26,6 @@ This folder contains Python-based time series and macroeconomic modeling work bu
 ### What the Code Does
 
 The code in this folder is organized around building reusable pipelines and model-ready datasets. In general, it:
-
 - Pulls macroeconomic time series from FRED (via API)
 - Pulls environmental time series from NOAA (currently focused on NOAA CO-OPS water level stations)
 - Stores raw pulls locally (raw data is not tracked in git)
@@ -50,7 +49,7 @@ This folder is a work in progress and reflects an expansion of an earlier endoge
 
 ## R Studio – Green Funding and Carbon Dynamics in South Africa
 
-**Status:** Complete Historical Project (Paper + Code Included)
+**Status:** Completed Project
 
 This project was developed in a time series econometrics course with Professor Cornwall.
 
@@ -75,17 +74,14 @@ The project follows a structured time series workflow:
    - Visual inspection  
    - Standard deviation rule-of-thumb checks  
    - All variables were found to be I(1)  
-
 2. Univariate ARIMA Modeling  
    - Best-fitting ARIMA specifications selected using BIC  
-
 3. Cointegration Analysis  
    - Johansen test  
    - Engle-Granger two-step method  
    - Cointegrating relationships identified between:  
      - Direction of Trade and Exports  
      - Direction of Trade and Imports  
-
 4. VAR Modeling  
    - Lag selection via Schwarz Criterion  
    - VAR(2) specification  
@@ -112,7 +108,6 @@ This folder contains Stata scripts that construct a county-level insurance marke
 ### What the Code Does
 
 The code:
-
 - Imports multiple county-level insurance summary reports (CSV format)
 - Cleans and standardizes dates, numeric fields, and categorical variables
 - Renames raw reporting fields into structured insurance metrics
