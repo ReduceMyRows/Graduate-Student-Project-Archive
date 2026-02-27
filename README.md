@@ -106,61 +106,28 @@ The full paper and code used to generate tables and figures are included in this
 
 ## Stata – Coastal Resiliency and Insurance Markets (South Florida)
 
-**Status:** Data Construction Phase
+**Status:** Completed Project (Data preview only)
 
-This project is a microeconomic theory paper on coastal resiliency strategies in South Florida.
+This folder contains Stata scripts that construct a county-level insurance market dataset for South Florida.
 
-### Focus
+### What the Code Does
 
-The research examines how coastal protection investments (e.g., seawalls) may affect:
+The code:
 
-- Climate risk exposure  
-- Insurance premium formation  
-- Risk pricing within regulated insurance markets  
+- Imports multiple county-level insurance summary reports (CSV format)
+- Cleans and standardizes dates, numeric fields, and categorical variables
+- Renames raw reporting fields into structured insurance metrics
+- Constructs policy, premium, exposure, cancellation, and transfer measures
+- Generates a premium-per-policy variable
+- Appends all counties into a unified panel-style dataset
+- Adds a county-level sea level exposure proxy (percent of population below 4 ft above mean sea level)
+- Outputs a master dataset ready for econometric analysis
 
-### Current Repository Contents
+### Data Sources
 
-At present, this folder includes:
+- County-level insurance market summary reports (QSR files)
+- County sea level exposure estimates (2010 Census–based values)
 
-- Data extraction scripts  
-- Variable construction  
-- Dataset transformation  
-- Documentation of:  
-  - Data sources  
-  - Why each dataset was chosen  
-  - Institutional background of the insurance market  
+### Dataset Documentation
 
-Econometric estimation is not yet included in this public version.
-
-This reflects the data engineering and conceptual foundation stage of the project.
-
----
-
-# Repository Philosophy
-
-This archive reflects an evolution:
-
-- Course projects  
-- Structured modeling frameworks  
-- Research-grade pipelines  
-
-Rather than isolating papers from code, this repository preserves:
-
-- Original written submissions  
-- The code used to produce them  
-- Transitional infrastructure  
-- Ongoing revisions  
-
-The goal is not simply archival storage, but progressive refinement.
-
----
-
-# Future Development
-
-Planned expansions include:
-
-- Formal environmental-macro integration models in Python  
-- Panel data extensions  
-- Structured replication notebooks  
-- Expanded NOAA integration  
-- Insurance risk pricing estimation modules  
+A PDF explaining the dataset structure, variable definitions, and selection rationale is included in this folder.
