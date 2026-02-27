@@ -15,8 +15,7 @@ In particular, the Python-based macroeconomic modeling work represents a structu
 The current structure reflects a transition from course-based modeling toward a modular environmental macroeconomic research framework integrating FRED and NOAA data.
 
 ---
-
-# Project Structure
+# Presented Projects
 
 ## Python – FRED Environmental Macroeconomic Models
 
