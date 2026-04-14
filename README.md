@@ -10,7 +10,7 @@ Some projects are complete historical submissions. Others are actively being rev
 
 Parts of this repository are under active revision and expansion.
 
-In particular, the Python-based macroeconomic modeling work represents a structured continuation and generalization of an earlier FRED Endogenous Growth Model project completed in a macroeconomic theory course with Professor Betz R.
+In particular, the Python-based macroeconomic modeling work represents a structured continuation and generalization of an earlier FRED Endogenous Growth Model project completed in a macroeconomic theory course with Professor Betz.
 
 The current structure reflects a transition from course-based modeling toward a modular environmental macroeconomic research framework integrating FRED and NOAA data.
 
